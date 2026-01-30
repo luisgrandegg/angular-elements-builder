@@ -1,0 +1,64 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Angular Elements Builder",
+  "type": "object",
+  "properties": {
+    "config": {
+      "type": "string",
+      "description": "Path to generator config file (optional; when omitted, components are discovered from tsconfig via RegisterWebComponent decorator)."
+    },
+    "tsconfig": {
+      "type": "string",
+      "description": "Path to tsconfig.json used to discover components. Defaults to project tsconfig when not set."
+    },
+    "outDir": {
+      "type": "string",
+      "description": "Output directory for generated artifacts. Angular writes its browser bundle (main-*.js) here; the builder also emits elements.d.ts (type definitions). Required when using browser output."
+    },
+    "elementOutputs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["browser", "typescript"]
+      },
+      "description": "Outputs to emit: 'browser' = run Angular build (main-*.js) + elements.d.ts; 'typescript' = elements.ts registration module.",
+      "default": ["browser"]
+    },
+    "buildTarget": {
+      "oneOf": [
+        { "type": "string" },
+        {
+          "type": "object",
+          "properties": {
+            "project": { "type": "string" },
+            "target": { "type": "string" },
+            "configuration": { "type": "string" }
+          },
+          "required": ["project", "target"],
+          "additionalProperties": false
+        }
+      ],
+      "description": "Angular build target used to produce the bundle (e.g. \"myApp:build\"). Required for browser output. The builder emits a registration entry and runs this target; the output is whatever Angular produces (ESM main-*.js). Load with <script type=\"module\" src=\"main-*.js\">."
+    },
+    "sourceMap": {
+      "type": "boolean",
+      "default": false,
+      "description": "Enable source maps for the build target. Defaults to false; set to true here or in buildTargetOptions to override."
+    },
+    "outputHashing": {
+      "type": "string",
+      "enum": ["none", "all", "media", "bundles"],
+      "description": "Cache-busting hashing for output filenames (e.g. main-XXX.js). When not set, the build target's configuration is used (inherit). When set, this value is passed to the build target."
+    },
+    "outputFileName": {
+      "type": "string",
+      "description": "Rename the main browser bundle to this filename after the build (e.g. \"elements.js\"). When not set, Angular's default name is kept (main.js or main-XXX.js). If the extension is omitted, \".js\" is appended. A matching source map file (main.js.map) is renamed accordingly when present."
+    },
+    "buildTargetOptions": {
+      "type": "object",
+      "description": "Optional overrides passed to the build target when it runs. Merged after sourceMap/defaults and outputHashing; builder's browser/outputPath always win. Use for other options (e.g. optimization).",
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": false
+}
