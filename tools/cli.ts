@@ -3,7 +3,7 @@ import path from "node:path";
 import process from "node:process";
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
-import { generateElements, loadConfig } from "./lib/generator.js";
+import { discoverElements, generateElements, loadConfig } from "./lib/generator.js";
 import { GeneratorError } from "./lib/errors.js";
 
 const argv = await yargs(hideBin(process.argv))
@@ -12,7 +12,6 @@ const argv = await yargs(hideBin(process.argv))
     alias: "c",
     type: "string",
     describe: "Path to generator config",
-    demandOption: true,
   })
   .option("outDir", {
     alias: "o",
@@ -28,12 +27,21 @@ const argv = await yargs(hideBin(process.argv))
   .parse();
 
 try {
-  const config = await loadConfig(path.resolve(argv.config));
-  await generateElements({
-    ...config,
-    outDir: argv.outDir ?? config.outDir,
-    tsconfig: argv.tsconfig ?? config.tsconfig,
-  });
+  if (argv.config) {
+    const config = await loadConfig(path.resolve(argv.config));
+    await generateElements({
+      ...config,
+      outDir: argv.outDir ?? config.outDir,
+      tsconfig: argv.tsconfig ?? config.tsconfig,
+    });
+  } else {
+    const elements = await discoverElements({ tsconfig: argv.tsconfig });
+    await generateElements({
+      elements,
+      outDir: argv.outDir,
+      tsconfig: argv.tsconfig,
+    });
+  }
 } catch (error) {
   if (error instanceof GeneratorError) {
     console.error(error.message);

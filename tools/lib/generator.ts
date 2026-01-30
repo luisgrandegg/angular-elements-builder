@@ -1,7 +1,7 @@
 import { mkdir, writeFile, access } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { Project } from "ts-morph";
+import { Project, SyntaxKind, type ClassDeclaration, type Decorator } from "ts-morph";
 import { GeneratorError } from "./errors.js";
 import { parseComponentRef, parseSignalMembers, resolveComponentClass } from "./parser.js";
 import {
@@ -25,6 +25,13 @@ export async function generateElements(config: GeneratorConfig): Promise<void> {
 
   const typings = emitTypeDeclarations(components);
   await writeFile(path.join(outDir, "custom-elements.d.ts"), typings);
+}
+
+export async function discoverElements(
+  config: Pick<GeneratorConfig, "tsconfig">,
+): Promise<NormalizedElementEntry[]> {
+  const project = await createProject({ elements: [], ...config });
+  return discoverElementsFromProject(project);
 }
 
 export async function loadConfig(configPath: string): Promise<GeneratorConfig> {
@@ -57,6 +64,105 @@ function normalizeElementsConfig(elements: GeneratorConfig["elements"]): Normali
 
   const entries = Object.entries(elements ?? {});
   return entries.map(([tag, component]) => ({ tag, component }));
+}
+
+function discoverElementsFromProject(project: Project): NormalizedElementEntry[] {
+  const entries: NormalizedElementEntry[] = [];
+  const seen = new Set<string>();
+
+  for (const sourceFile of project.getSourceFiles()) {
+    for (const classDecl of sourceFile.getClasses()) {
+      const registerDecorator = classDecl.getDecorator("RegisterWebComponent");
+      if (!registerDecorator) {
+        continue;
+      }
+
+      const className = classDecl.getName();
+      if (!className) {
+        throw new GeneratorError(
+          `RegisterWebComponent is applied to an unnamed class in ${sourceFile.getFilePath()}`,
+        );
+      }
+
+      const tag =
+        getTagFromRegisterDecorator(registerDecorator) ?? getTagFromComponentDecorator(classDecl);
+      if (!tag) {
+        throw new GeneratorError(
+          `RegisterWebComponent is missing a tag for ${className} in ${sourceFile.getFilePath()}`,
+        );
+      }
+      if (seen.has(tag)) {
+        throw new GeneratorError(`Tag is duplicated: ${tag}`);
+      }
+      seen.add(tag);
+
+      entries.push({
+        tag,
+        component: `${sourceFile.getFilePath()}#${className}`,
+      });
+    }
+  }
+
+  return entries;
+}
+
+function getTagFromRegisterDecorator(decorator: Decorator): string | undefined {
+  const args = decorator.getArguments();
+  if (args.length === 0) {
+    return undefined;
+  }
+
+  const first = args[0];
+  if (
+    first.isKind(SyntaxKind.StringLiteral) ||
+    first.isKind(SyntaxKind.NoSubstitutionTemplateLiteral)
+  ) {
+    return first.getLiteralText();
+  }
+
+  if (first.isKind(SyntaxKind.ObjectLiteralExpression)) {
+    const tagProp = first.getProperty("tag") ?? first.getProperty("selector");
+    if (tagProp && tagProp.isKind(SyntaxKind.PropertyAssignment)) {
+      const initializer = tagProp.getInitializer();
+      if (
+        initializer &&
+        (initializer.isKind(SyntaxKind.StringLiteral) ||
+          initializer.isKind(SyntaxKind.NoSubstitutionTemplateLiteral))
+      ) {
+        return initializer.getLiteralText();
+      }
+    }
+  }
+
+  return undefined;
+}
+
+function getTagFromComponentDecorator(classDecl: ClassDeclaration): string | undefined {
+  const componentDecorator = classDecl.getDecorator("Component");
+  if (!componentDecorator) {
+    return undefined;
+  }
+  const args = componentDecorator.getArguments();
+  if (args.length === 0) {
+    return undefined;
+  }
+  const first = args[0];
+  if (!first.isKind(SyntaxKind.ObjectLiteralExpression)) {
+    return undefined;
+  }
+  const selectorProp = first.getProperty("selector");
+  if (!selectorProp || !selectorProp.isKind(SyntaxKind.PropertyAssignment)) {
+    return undefined;
+  }
+  const initializer = selectorProp.getInitializer();
+  if (
+    initializer &&
+    (initializer.isKind(SyntaxKind.StringLiteral) ||
+      initializer.isKind(SyntaxKind.NoSubstitutionTemplateLiteral))
+  ) {
+    return initializer.getLiteralText();
+  }
+  return undefined;
 }
 
 async function createProject(config: GeneratorConfig): Promise<Project> {

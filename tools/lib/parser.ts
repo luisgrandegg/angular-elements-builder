@@ -4,6 +4,7 @@ import type { ComponentRef, SignalMember } from "./types.js";
 
 export function parseComponentRef(component: string): ComponentRef {
   const [filePath, className] = component.split("#");
+
   if (!className && filePath) {
     return { className: filePath };
   }
