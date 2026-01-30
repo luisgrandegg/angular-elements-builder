@@ -12,6 +12,8 @@
     "build": "tsc -p tsconfig.json",
     "test": "vitest",
     "test:ci": "vitest run",
+    "test:integration": "npm run build && node lib/cli.js -c integration/config.json -t ./tsconfig.integration.json",
+    "test:integration:discover": "npm run build && node lib/cli.js -t ./tsconfig.integration.json",
     "lint": "eslint",
     "lint:all": "eslint \"tools/**/*.ts\"",
     "prepare": "husky install",
