@@ -10,7 +10,8 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "vitest run",
+    "test": "vitest",
+    "test:ci": "vitest run",
     "lint": "eslint",
     "lint:all": "eslint \"tools/**/*.ts\"",
     "prepare": "husky install",
@@ -24,6 +25,7 @@
     "yargs": "^17.7.2"
   },
   "devDependencies": {
+    "@angular/core": "^21.1.2",
     "@types/node": "^20.11.30",
     "@types/yargs": "^17.0.32",
     "@typescript-eslint/eslint-plugin": "^7.6.0",

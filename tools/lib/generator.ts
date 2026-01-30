@@ -95,6 +95,6 @@ function extractComponentMetadata(project: Project, entry: NormalizedElementEntr
 }
 
 async function importJson(filePath: string): Promise<GeneratorConfig> {
-  const data = await import(pathToFileURL(filePath).href, { assert: { type: "json" } } as any);
+  const data = await import(pathToFileURL(filePath).href, { with: { type: "json" } }, );
   return data.default ?? data;
 }

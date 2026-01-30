@@ -54,22 +54,32 @@ export function parseSignalMembers(classDecl: ClassDeclaration): SignalMember[] 
       if (expression.getKind() === SyntaxKind.Identifier) {
         const identifier = expression.getText();
         if (identifier === "input") {
-          return {
+          const base: Partial<SignalMember> = {
             name: property.getName(),
             kind: "input",
             required: false,
             typeText,
-            alias,
           };
+
+          if (alias) {
+            base.alias = alias;
+          }
+
+          return base;
         }
         if (identifier === "output") {
-          return {
+          const base: Partial<SignalMember> = {
             name: property.getName(),
             kind: "output",
             required: false,
             typeText,
-            alias,
           };
+
+          if (alias) {
+            base.alias = alias;
+          }
+
+          return base;
         }
       }
 
@@ -78,13 +88,18 @@ export function parseSignalMembers(classDecl: ClassDeclaration): SignalMember[] 
         const leftText = propertyAccess.getExpression().getText();
         const rightText = propertyAccess.getName();
         if (leftText === "input" && rightText === "required") {
-          return {
+          const base: Partial<SignalMember> = {
             name: property.getName(),
             kind: "input",
             required: true,
             typeText,
-            alias,
           };
+
+          if (alias) {
+            base.alias = alias;
+          }
+
+          return base;
         }
       }
 
@@ -93,19 +108,37 @@ export function parseSignalMembers(classDecl: ClassDeclaration): SignalMember[] 
     .filter((member): member is SignalMember => member !== null);
 }
 
-function getMemberTypeText(property: { getType: () => any }, callExpression: CallExpression): string {
+function getMemberTypeText(
+  property: { getType: () => any; getTypeNode: () => { getText: () => string } | undefined },
+  callExpression: CallExpression,
+): string {
   const typeArguments = callExpression.getTypeArguments();
   if (typeArguments.length > 0) {
     return typeArguments[0].getText();
   }
 
+  const declaredTypeNode = property.getTypeNode();
+  if (declaredTypeNode) {
+    return declaredTypeNode.getText();
+  }
+
   const type = property.getType();
   const typeText = type.getText();
+  if (isSignalUnknownType(typeText)) {
+    return "unknown";
+  }
   if (typeText && typeText !== "any") {
     return typeText;
   }
 
   return "unknown";
+}
+
+function isSignalUnknownType(typeText: string): boolean {
+  return (
+    typeText.includes("InputSignal<unknown>") ||
+    typeText.includes("OutputEmitterRef<unknown>")
+  );
 }
 
 function getAliasFromArguments(callExpression: CallExpression): string | undefined {

@@ -4,14 +4,14 @@
     "module": "nodenext",
     "moduleResolution": "nodenext",
     "outDir": "lib",
-    "rootDir": "tools",
+    "rootDir": "integration",
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
     "strict": true,
     "esModuleInterop": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "noEmit": true
   },
-  "include": ["tools/**/*.ts"],
-  "exclude": ["**/__tests__/**", "**/*.test.ts"]
+  "include": ["integration/**/*.ts"],
 }

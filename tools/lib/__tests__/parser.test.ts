@@ -3,8 +3,8 @@ import path from "node:path";
 import { Project } from "ts-morph";
 import { parseSignalMembers, resolveComponentClass } from "../parser.js";
 
-const fixturePath = path.resolve(
-  "tools/lib/__tests__/fixtures/sample.component.ts",
+const fixturePath = path.resolve(__dirname,
+  "./fixtures/sample.component.ts",
 );
 
 describe("parseSignalMembers", () => {
