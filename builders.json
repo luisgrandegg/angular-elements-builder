@@ -1,0 +1,9 @@
+{
+  "builders": {
+    "generate-elements": {
+      "implementation": "./lib/builder/index.js",
+      "schema": "./tools/builder/schema.json",
+      "description": "Generate Angular Elements custom elements outputs."
+    }
+  }
+}

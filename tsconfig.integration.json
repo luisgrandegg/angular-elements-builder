@@ -4,14 +4,18 @@
     "module": "nodenext",
     "moduleResolution": "nodenext",
     "outDir": "lib",
-    "rootDir": "integration",
+    "rootDir": ".",
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "noEmit": true
+    "noEmit": true,
+    "baseUrl": ".",
+    "paths": {
+      "angular-elements-builder": ["./lib/index.js"]
+    }
   },
-  "include": ["integration/**/*.ts", "lib/**/*.ts"],
+  "include": ["integration/src/**/*.ts", "lib/**/*.ts"]
 }

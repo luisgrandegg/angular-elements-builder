@@ -1,5 +1,0 @@
-{
-  "elements": {
-    "lib-sample": "integration/sample.component.ts#SampleComponent"
-  }
-}

@@ -5,8 +5,6 @@ on:
   push:
     branches:
       - main
-    tags:
-      - "*"
 
 jobs:
   pr-checks:
@@ -26,6 +24,10 @@ jobs:
   main-release:
     if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -39,15 +41,4 @@ jobs:
       - run: npm run semantic-release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  tag-build:
-    if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: "npm"
-      - run: npm ci
-      - run: npm run build
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -1,7 +1,7 @@
 import { mkdir, writeFile, access } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { Project, SyntaxKind, type ClassDeclaration, type Decorator } from "ts-morph";
+import { Project, SyntaxKind, type Decorator } from "ts-morph";
 import { GeneratorError } from "./errors.js";
 import { parseComponentRef, parseSignalMembers, resolveComponentClass } from "./parser.js";
 import {
@@ -10,6 +10,7 @@ import {
   type NormalizedElementEntry,
 } from "./types.js";
 import { emitCustomElementsManifest } from "./manifest.js";
+import { emitElementsRegistration } from "./elements-emitter.js";
 import { emitTypeDeclarations } from "./types-emitter.js";
 
 export async function generateElements(config: GeneratorConfig): Promise<void> {
@@ -17,14 +18,32 @@ export async function generateElements(config: GeneratorConfig): Promise<void> {
   const project = await createProject(config);
   const components = normalized.map((entry) => extractComponentMetadata(project, entry));
 
-  const outDir = config.outDir ?? "dist";
+  const outDir = path.resolve(config.outDir ?? "dist");
   await mkdir(outDir, { recursive: true });
 
   const manifest = emitCustomElementsManifest(components);
   await writeFile(path.join(outDir, "custom-elements.json"), JSON.stringify(manifest, null, 2));
 
   const typings = emitTypeDeclarations(components);
-  await writeFile(path.join(outDir, "custom-elements.d.ts"), typings);
+  await writeFile(path.join(outDir, "elements.d.ts"), typings);
+
+  const elementOutputs = config.elementOutputs ?? ["browser"];
+  const useBuildTarget = Boolean(config.buildTarget);
+  for (const output of elementOutputs) {
+    if (output === "browser") {
+      if (!useBuildTarget) {
+        throw new GeneratorError(
+          "Browser output requires buildTarget so the Angular build produces the bundle. Add buildTarget to your generate-elements options.",
+        );
+      }
+      await emitBrowserEntryOnly(components, outDir, config);
+    } else if (output === "typescript") {
+      const tsCode = emitElementsRegistration(components, { mode: "typescript", outDir });
+      await writeFile(path.join(outDir, "elements.ts"), tsCode);
+    } else {
+      throw new GeneratorError(`Unsupported element output type: ${output}`);
+    }
+  }
 }
 
 export async function discoverElements(
@@ -84,11 +103,10 @@ function discoverElementsFromProject(project: Project): NormalizedElementEntry[]
         );
       }
 
-      const tag =
-        getTagFromRegisterDecorator(registerDecorator) ?? getTagFromComponentDecorator(classDecl);
+      const tag = getTagFromRegisterDecorator(registerDecorator);
       if (!tag) {
         throw new GeneratorError(
-          `RegisterWebComponent is missing a tag for ${className} in ${sourceFile.getFilePath()}`,
+          `RegisterWebComponent must provide a tag for ${className} in ${sourceFile.getFilePath()}`,
         );
       }
       if (seen.has(tag)) {
@@ -120,48 +138,6 @@ function getTagFromRegisterDecorator(decorator: Decorator): string | undefined {
     return first.getLiteralText();
   }
 
-  if (first.isKind(SyntaxKind.ObjectLiteralExpression)) {
-    const tagProp = first.getProperty("tag") ?? first.getProperty("selector");
-    if (tagProp && tagProp.isKind(SyntaxKind.PropertyAssignment)) {
-      const initializer = tagProp.getInitializer();
-      if (
-        initializer &&
-        (initializer.isKind(SyntaxKind.StringLiteral) ||
-          initializer.isKind(SyntaxKind.NoSubstitutionTemplateLiteral))
-      ) {
-        return initializer.getLiteralText();
-      }
-    }
-  }
-
-  return undefined;
-}
-
-function getTagFromComponentDecorator(classDecl: ClassDeclaration): string | undefined {
-  const componentDecorator = classDecl.getDecorator("Component");
-  if (!componentDecorator) {
-    return undefined;
-  }
-  const args = componentDecorator.getArguments();
-  if (args.length === 0) {
-    return undefined;
-  }
-  const first = args[0];
-  if (!first.isKind(SyntaxKind.ObjectLiteralExpression)) {
-    return undefined;
-  }
-  const selectorProp = first.getProperty("selector");
-  if (!selectorProp || !selectorProp.isKind(SyntaxKind.PropertyAssignment)) {
-    return undefined;
-  }
-  const initializer = selectorProp.getInitializer();
-  if (
-    initializer &&
-    (initializer.isKind(SyntaxKind.StringLiteral) ||
-      initializer.isKind(SyntaxKind.NoSubstitutionTemplateLiteral))
-  ) {
-    return initializer.getLiteralText();
-  }
   return undefined;
 }
 
@@ -203,4 +179,29 @@ function extractComponentMetadata(project: Project, entry: NormalizedElementEntr
 async function importJson(filePath: string): Promise<GeneratorConfig> {
   const data = await import(pathToFileURL(filePath).href, { with: { type: "json" } }, );
   return data.default ?? data;
+}
+
+/** Emit only the browser entry .ts file (no esbuild). Used when buildTarget is set. */
+async function emitBrowserEntryOnly(
+  components: ComponentMetadata[],
+  outDir: string,
+  config: GeneratorConfig,
+): Promise<void> {
+  // When browserEntryOutDir is set, emit under the project source root so the entry is part of the
+  // TypeScript program and the Angular build discovers component styles from the entry's dependency tree.
+  const entryDir =
+    config.browserEntryOutDir != null
+      ? path.isAbsolute(config.browserEntryOutDir)
+        ? config.browserEntryOutDir
+        : path.resolve(config.workspaceRoot ?? process.cwd(), config.browserEntryOutDir)
+      : outDir;
+  await mkdir(entryDir, { recursive: true });
+  const entryPath = path.join(entryDir, "elements.browser.entry.ts");
+  // Omit import extension so the Angular/TS build accepts the entry (TS5097: no .ts in imports).
+  const entryCode = emitElementsRegistration(components, {
+    mode: "browser",
+    outDir: entryDir,
+    inlineComponents: true,
+  });
+  await writeFile(entryPath, entryCode);
 }
